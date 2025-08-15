@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Modal, TextInput } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Modal, TextInput, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAppContext, FeedItem } from '@/contexts/AppContext';
+import Dropdown from '@/components/Dropdown';
+import DatePicker from '@/components/DatePicker';
 
-const FeedItem = ({ name, currentStock, dailyConsumption, daysRemaining, alertLevel, onPress }: any) => {
+const FeedCard = ({ feed, onPress }: any) => {
   const getAlertColor = (level: string) => {
     switch (level) {
       case 'low': return '#DC2626';
@@ -22,21 +25,23 @@ const FeedItem = ({ name, currentStock, dailyConsumption, daysRemaining, alertLe
     }
   };
 
+  const daysRemaining = Math.floor(feed.currentStock / feed.dailyConsumption);
+
   return (
-    <TouchableOpacity style={styles.feedCard} onPress={() => onPress(name)}>
+    <TouchableOpacity style={styles.feedCard} onPress={() => onPress(feed)}>
       <View style={styles.feedHeader}>
         <View>
-          <Text style={styles.feedName}>{name}</Text>
-          <Text style={styles.feedStock}>{currentStock} kg remaining</Text>
+          <Text style={styles.feedName}>{feed.name}</Text>
+          <Text style={styles.feedStock}>{feed.currentStock} kg remaining</Text>
         </View>
-        <View style={[styles.alertBadge, { backgroundColor: getAlertColor(alertLevel) }]}>
-          <Text style={styles.alertText}>{getAlertText(alertLevel)}</Text>
+        <View style={[styles.alertBadge, { backgroundColor: getAlertColor(feed.alertLevel) }]}>
+          <Text style={styles.alertText}>{getAlertText(feed.alertLevel)}</Text>
         </View>
       </View>
 
       <View style={styles.feedStats}>
         <View style={styles.statColumn}>
-          <Text style={styles.statValue}>{dailyConsumption} kg</Text>
+          <Text style={styles.statValue}>{feed.dailyConsumption} kg</Text>
           <Text style={styles.statLabel}>Daily Usage</Text>
         </View>
         <View style={styles.statColumn}>
@@ -44,7 +49,7 @@ const FeedItem = ({ name, currentStock, dailyConsumption, daysRemaining, alertLe
           <Text style={styles.statLabel}>Days Remaining</Text>
         </View>
         <View style={styles.statColumn}>
-          <Text style={styles.statValue}>$2.45</Text>
+          <Text style={styles.statValue}>${feed.cost}</Text>
           <Text style={styles.statLabel}>Cost per kg</Text>
         </View>
       </View>
@@ -55,8 +60,8 @@ const FeedItem = ({ name, currentStock, dailyConsumption, daysRemaining, alertLe
             style={[
               styles.progressFill,
               { 
-                width: `${Math.min(100, (currentStock / 1000) * 100)}%`,
-                backgroundColor: getAlertColor(alertLevel)
+                width: `${Math.min(100, (feed.currentStock / feed.totalCapacity) * 100)}%`,
+                backgroundColor: getAlertColor(feed.alertLevel)
               }
             ]} 
           />
@@ -66,101 +71,93 @@ const FeedItem = ({ name, currentStock, dailyConsumption, daysRemaining, alertLe
   );
 };
 
-const ConsumptionChart = ({ data }: any) => (
-  <View style={styles.chartContainer}>
-    <Text style={styles.chartTitle}>Weekly Feed Consumption</Text>
-    <View style={styles.chart}>
-      {data.map((item: any, index: number) => (
-        <View key={index} style={styles.chartBar}>
-          <View 
-            style={[
-              styles.bar, 
-              { 
-                height: `${(item.consumption / Math.max(...data.map((d: any) => d.consumption))) * 100}%`,
-                backgroundColor: '#16A34A'
-              }
-            ]} 
-          />
-          <Text style={styles.chartLabel}>{item.day}</Text>
-          <Text style={styles.chartValue}>{item.consumption}</Text>
-        </View>
-      ))}
-    </View>
-  </View>
-);
-
 export default function Feed() {
+  const { state, dispatch } = useAppContext();
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
-  const [selectedFeed, setSelectedFeed] = useState(null);
+  const [selectedFeed, setSelectedFeed] = useState<FeedItem | null>(null);
+  const [isDetailModalVisible, setIsDetailModalVisible] = useState(false);
+  const [actionType, setActionType] = useState<'usage' | 'restock'>('usage');
+  
+  // Form state
+  const [selectedFeedId, setSelectedFeedId] = useState('');
+  const [amount, setAmount] = useState('');
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedCoops, setSelectedCoops] = useState<string[]>([]);
+  const [notes, setNotes] = useState('');
 
-  const feedInventory = [
-    {
-      name: 'Layer Mash',
-      currentStock: 850,
-      dailyConsumption: 125,
-      daysRemaining: 7,
-      alertLevel: 'medium',
-      totalCapacity: 2000,
-      lastRefill: '3 days ago',
-      supplier: 'Farm Feed Co.',
-      cost: 2.45,
-    },
-    {
-      name: 'Starter Feed',
-      currentStock: 150,
-      dailyConsumption: 45,
-      daysRemaining: 3,
-      alertLevel: 'low',
-      totalCapacity: 500,
-      lastRefill: '1 week ago',
-      supplier: 'Premium Feeds Ltd',
-      cost: 3.20,
-    },
-    {
-      name: 'Grower Feed',
-      currentStock: 1200,
-      dailyConsumption: 80,
-      daysRemaining: 15,
-      alertLevel: 'high',
-      totalCapacity: 1500,
-      lastRefill: '2 days ago',
-      supplier: 'Farm Feed Co.',
-      cost: 2.80,
-    },
-    {
-      name: 'Finisher Feed',
-      currentStock: 600,
-      dailyConsumption: 95,
-      daysRemaining: 6,
-      alertLevel: 'medium',
-      totalCapacity: 1000,
-      lastRefill: '5 days ago',
-      supplier: 'Quality Nutrition',
-      cost: 2.95,
-    },
-  ];
+  const feedOptions = state.feedInventory.map(feed => ({
+    label: feed.name,
+    value: feed.id,
+  }));
 
-  const weeklyData = [
-    { day: 'Mon', consumption: 340 },
-    { day: 'Tue', consumption: 355 },
-    { day: 'Wed', consumption: 330 },
-    { day: 'Thu', consumption: 365 },
-    { day: 'Fri', consumption: 345 },
-    { day: 'Sat', consumption: 320 },
-    { day: 'Sun', consumption: 335 },
-  ];
-
-  const totalStock = feedInventory.reduce((sum, feed) => sum + feed.currentStock, 0);
-  const totalCapacity = feedInventory.reduce((sum, feed) => sum + feed.totalCapacity, 0);
-  const dailyConsumption = feedInventory.reduce((sum, feed) => sum + feed.dailyConsumption, 0);
-  const averageDaysRemaining = Math.round(
-    feedInventory.reduce((sum, feed) => sum + feed.daysRemaining, 0) / feedInventory.length
-  );
-
-  const handleFeedPress = (feedName: string) => {
-    const feed = feedInventory.find(f => f.name === feedName);
+  const handleFeedPress = (feed: FeedItem) => {
     setSelectedFeed(feed);
+    setIsDetailModalVisible(true);
   };
+
+  const handleAddUsage = () => {
+    if (!selectedFeedId || !amount) {
+      Alert.alert('Error', 'Please fill in all required fields');
+      return;
+    }
+
+    const amountNum = parseFloat(amount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      Alert.alert('Error', 'Please enter a valid amount');
+      return;
+    }
+
+    const feed = state.feedInventory.find(f => f.id === selectedFeedId);
+    if (!feed) {
+      Alert.alert('Error', 'Selected feed not found');
+      return;
+    }
+
+    if (actionType === 'usage' && amountNum > feed.currentStock) {
+      Alert.alert('Error', 'Amount exceeds current stock');
+      return;
+    }
+
+    const actionPayload = {
+      feedId: selectedFeedId,
+      amount: amountNum,
+      date: selectedDate.toLocaleDateString(),
+    };
+
+    if (actionType === 'usage') {
+      dispatch({ type: 'ADD_FEED_USAGE', payload: actionPayload });
+    } else {
+      dispatch({ type: 'ADD_FEED_RESTOCK', payload: actionPayload });
+    }
+
+    // Reset form
+    setSelectedFeedId('');
+    setAmount('');
+    setSelectedCoops([]);
+    setNotes('');
+    setSelectedDate(new Date());
+    setIsAddModalVisible(false);
+    
+    Alert.alert('Success', `Feed ${actionType} recorded successfully!`);
+  };
+
+  const toggleCoopSelection = (coopId: string) => {
+    setSelectedCoops(prev => 
+      prev.includes(coopId) 
+        ? prev.filter(id => id !== coopId)
+        : [...prev, coopId]
+    );
+  };
+
+  const totalStock = state.feedInventory.reduce((sum, feed) => sum + feed.currentStock, 0);
+  const totalCapacity = state.feedInventory.reduce((sum, feed) => sum + feed.totalCapacity, 0);
+  const dailyConsumption = state.feedInventory.reduce((sum, feed) => sum + feed.dailyConsumption, 0);
+  const averageDaysRemaining = state.feedInventory.length > 0
+    ? Math.round(
+        state.feedInventory.reduce((sum, feed) => sum + Math.floor(feed.currentStock / feed.dailyConsumption), 0) / 
+        state.feedInventory.length
+      )
+    : 0;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -202,22 +199,13 @@ export default function Feed() {
           </View>
         </View>
 
-        {/* Consumption Chart */}
-        <View style={styles.chartSection}>
-          <ConsumptionChart data={weeklyData} />
-        </View>
-
         {/* Feed Inventory */}
         <View style={styles.inventorySection}>
           <Text style={styles.sectionTitle}>Feed Inventory</Text>
-          {feedInventory.map((feed, index) => (
-            <FeedItem
-              key={index}
-              name={feed.name}
-              currentStock={feed.currentStock}
-              dailyConsumption={feed.dailyConsumption}
-              daysRemaining={feed.daysRemaining}
-              alertLevel={feed.alertLevel}
+          {state.feedInventory.map((feed) => (
+            <FeedCard
+              key={feed.id}
+              feed={feed}
               onPress={handleFeedPress}
             />
           ))}
@@ -227,11 +215,23 @@ export default function Feed() {
         <View style={styles.actionsSection}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
           <View style={styles.actionGrid}>
-            <TouchableOpacity style={styles.actionCard}>
+            <TouchableOpacity 
+              style={styles.actionCard}
+              onPress={() => {
+                setActionType('usage');
+                setIsAddModalVisible(true);
+              }}
+            >
               <Ionicons name="add-circle" size={24} color="#16A34A" />
               <Text style={styles.actionText}>Record Consumption</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionCard}>
+            <TouchableOpacity 
+              style={styles.actionCard}
+              onPress={() => {
+                setActionType('restock');
+                setIsAddModalVisible(true);
+              }}
+            >
               <Ionicons name="cube" size={24} color="#F59E0B" />
               <Text style={styles.actionText}>Restock Feed</Text>
             </TouchableOpacity>
@@ -247,68 +247,89 @@ export default function Feed() {
         </View>
       </ScrollView>
 
-      {/* Add Feed Modal */}
+      {/* Add Feed Usage/Restock Modal */}
       <Modal visible={isAddModalVisible} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setIsAddModalVisible(false)}>
               <Ionicons name="close" size={24} color="#374151" />
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Record Feed Usage</Text>
-            <TouchableOpacity>
+            <Text style={styles.modalTitle}>
+              {actionType === 'usage' ? 'Record Feed Usage' : 'Restock Feed'}
+            </Text>
+            <TouchableOpacity onPress={handleAddUsage}>
               <Text style={styles.saveButton}>Save</Text>
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.modalContent}>
             <View style={styles.formSection}>
-              <Text style={styles.inputLabel}>Feed Type</Text>
-              <TouchableOpacity style={styles.selectInput}>
-                <Text style={styles.selectText}>Select feed type</Text>
-                <Ionicons name="chevron-down" size={20} color="#6B7280" />
-              </TouchableOpacity>
+              <Text style={styles.inputLabel}>Feed Type *</Text>
+              <Dropdown
+                options={feedOptions}
+                selectedValue={selectedFeedId}
+                onSelect={setSelectedFeedId}
+                placeholder="Select feed type"
+              />
             </View>
 
             <View style={styles.formSection}>
-              <Text style={styles.inputLabel}>Amount Used (kg)</Text>
+              <Text style={styles.inputLabel}>
+                Amount {actionType === 'usage' ? 'Used' : 'Added'} (kg) *
+              </Text>
               <TextInput
                 style={styles.input}
                 placeholder="Enter amount"
                 keyboardType="numeric"
                 placeholderTextColor="#9CA3AF"
+                value={amount}
+                onChangeText={setAmount}
               />
             </View>
 
             <View style={styles.formSection}>
               <Text style={styles.inputLabel}>Date & Time</Text>
-              <TouchableOpacity style={styles.dateInput}>
-                <Text style={styles.dateText}>Today - 10:30 AM</Text>
-                <Ionicons name="time" size={20} color="#6B7280" />
-              </TouchableOpacity>
+              <DatePicker
+                selectedDate={selectedDate}
+                onDateChange={setSelectedDate}
+              />
             </View>
 
-            <View style={styles.formSection}>
-              <Text style={styles.inputLabel}>Assigned Coops</Text>
-              <View style={styles.checkboxGroup}>
-                {['Coop A', 'Coop B', 'Coop C', 'Coop D', 'Coop E'].map((coop) => (
-                  <TouchableOpacity key={coop} style={styles.checkboxItem}>
-                    <View style={styles.checkbox}>
-                      <Ionicons name="checkmark" size={16} color="#16A34A" />
-                    </View>
-                    <Text style={styles.checkboxLabel}>{coop}</Text>
-                  </TouchableOpacity>
-                ))}
+            {actionType === 'usage' && (
+              <View style={styles.formSection}>
+                <Text style={styles.inputLabel}>Assigned Coops</Text>
+                <View style={styles.checkboxGroup}>
+                  {state.flocks.map((flock) => (
+                    <TouchableOpacity 
+                      key={flock.id} 
+                      style={styles.checkboxItem}
+                      onPress={() => toggleCoopSelection(flock.id)}
+                    >
+                      <View style={[
+                        styles.checkbox,
+                        selectedCoops.includes(flock.id) && styles.checkboxSelected
+                      ]}>
+                        {selectedCoops.includes(flock.id) && (
+                          <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                        )}
+                      </View>
+                      <Text style={styles.checkboxLabel}>{flock.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
-            </View>
+            )}
 
             <View style={styles.formSection}>
               <Text style={styles.inputLabel}>Notes</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
-                placeholder="Any notes about feed quality, consumption patterns, etc..."
+                placeholder={`Any notes about ${actionType === 'usage' ? 'feed consumption' : 'restocking'}...`}
                 multiline
                 numberOfLines={4}
                 placeholderTextColor="#9CA3AF"
+                value={notes}
+                onChangeText={setNotes}
               />
             </View>
           </ScrollView>
@@ -316,10 +337,10 @@ export default function Feed() {
       </Modal>
 
       {/* Feed Details Modal */}
-      <Modal visible={!!selectedFeed} animationType="slide" presentationStyle="pageSheet">
+      <Modal visible={isDetailModalVisible} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setSelectedFeed(null)}>
+            <TouchableOpacity onPress={() => setIsDetailModalVisible(false)}>
               <Ionicons name="close" size={24} color="#374151" />
             </TouchableOpacity>
             <Text style={styles.modalTitle}>{selectedFeed?.name}</Text>
@@ -338,7 +359,9 @@ export default function Feed() {
                     <Text style={styles.statusLabel}>Current Stock</Text>
                   </View>
                   <View style={styles.statusCard}>
-                    <Text style={styles.statusValue}>{selectedFeed.daysRemaining}</Text>
+                    <Text style={styles.statusValue}>
+                      {Math.floor(selectedFeed.currentStock / selectedFeed.dailyConsumption)}
+                    </Text>
                     <Text style={styles.statusLabel}>Days Remaining</Text>
                   </View>
                   <View style={styles.statusCard}>
@@ -375,10 +398,26 @@ export default function Feed() {
               </View>
 
               <View style={styles.actionButtons}>
-                <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#16A34A' }]}>
+                <TouchableOpacity 
+                  style={[styles.actionBtn, { backgroundColor: '#16A34A' }]}
+                  onPress={() => {
+                    setSelectedFeedId(selectedFeed.id);
+                    setActionType('usage');
+                    setIsDetailModalVisible(false);
+                    setIsAddModalVisible(true);
+                  }}
+                >
                   <Text style={styles.actionBtnText}>Record Usage</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#F59E0B' }]}>
+                <TouchableOpacity 
+                  style={[styles.actionBtn, { backgroundColor: '#F59E0B' }]}
+                  onPress={() => {
+                    setSelectedFeedId(selectedFeed.id);
+                    setActionType('restock');
+                    setIsDetailModalVisible(false);
+                    setIsAddModalVisible(true);
+                  }}
+                >
                   <Text style={styles.actionBtnText}>Restock</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#8B5A2B' }]}>
@@ -456,51 +495,6 @@ const styles = StyleSheet.create({
   },
   overviewSubtext: {
     fontSize: 12,
-    color: '#9CA3AF',
-  },
-  chartSection: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  chartContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  chartTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 16,
-  },
-  chart: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    height: 120,
-  },
-  chartBar: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  bar: {
-    backgroundColor: '#16A34A',
-    width: 16,
-    borderRadius: 2,
-    marginBottom: 8,
-  },
-  chartLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 4,
-  },
-  chartValue: {
-    fontSize: 11,
     color: '#9CA3AF',
   },
   inventorySection: {
@@ -657,34 +651,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#111827',
   },
-  selectInput: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    padding: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  selectText: {
-    fontSize: 16,
-    color: '#9CA3AF',
-  },
-  dateInput: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    padding: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  dateText: {
-    fontSize: 16,
-    color: '#111827',
-  },
   checkboxGroup: {
     gap: 12,
   },
@@ -696,12 +662,15 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderWidth: 2,
-    borderColor: '#16A34A',
+    borderColor: '#D1D5DB',
     borderRadius: 4,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+  },
+  checkboxSelected: {
     backgroundColor: '#16A34A',
+    borderColor: '#16A34A',
   },
   checkboxLabel: {
     fontSize: 16,

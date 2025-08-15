@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Modal, TextInput } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Modal, TextInput, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAppContext, Flock } from '@/contexts/AppContext';
+import Dropdown from '@/components/Dropdown';
 
 const FlockCard = ({ flock, onPress }: any) => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Excellent': return '#16A34A';
       case 'Good': return '#F59E0B';
+      case 'Fair': return '#F59E0B';
       case 'Poor': return '#DC2626';
+      case 'Critical': return '#DC2626';
       default: return '#6B7280';
     }
   };
@@ -53,82 +57,72 @@ const FlockCard = ({ flock, onPress }: any) => {
 };
 
 export default function Flocks() {
-  const [selectedFlock, setSelectedFlock] = useState(null);
+  const { state, dispatch } = useAppContext();
+  const [selectedFlock, setSelectedFlock] = useState<Flock | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
+  
+  // Form state for adding new flock
+  const [newFlockName, setNewFlockName] = useState('');
+  const [newFlockBreed, setNewFlockBreed] = useState('');
+  const [newFlockCount, setNewFlockCount] = useState('');
+  const [newFlockAge, setNewFlockAge] = useState('');
+  const [newFlockNotes, setNewFlockNotes] = useState('');
 
-  const flocks = [
-    {
-      id: 1,
-      name: 'Coop A - Layer House',
-      breed: 'Rhode Island Red',
-      age: 28,
-      totalBirds: 500,
-      mortality: 3,
-      eggProduction: 87,
-      avgWeight: 1800,
-      health: 'Excellent',
-      lastUpdated: '2 hours ago',
-      notes: 'High egg production this week',
-    },
-    {
-      id: 2,
-      name: 'Coop B - Young Layers',
-      breed: 'New Hampshire',
-      age: 22,
-      totalBirds: 450,
-      mortality: 1,
-      eggProduction: 75,
-      avgWeight: 1650,
-      health: 'Good',
-      lastUpdated: '4 hours ago',
-      notes: 'Starting to reach peak production',
-    },
-    {
-      id: 3,
-      name: 'Coop C - Broilers',
-      breed: 'Cornish Cross',
-      age: 6,
-      totalBirds: 800,
-      mortality: 12,
-      eggProduction: 0,
-      avgWeight: 900,
-      health: 'Good',
-      lastUpdated: '1 hour ago',
-      notes: 'Ready for processing next week',
-    },
-    {
-      id: 4,
-      name: 'Coop D - Heritage Breeds',
-      breed: 'Plymouth Rock',
-      age: 35,
-      totalBirds: 300,
-      mortality: 5,
-      eggProduction: 68,
-      avgWeight: 2100,
-      health: 'Excellent',
-      lastUpdated: '6 hours ago',
-      notes: 'Excellent foraging behavior',
-    },
-    {
-      id: 5,
-      name: 'Coop E - Breeding Stock',
-      breed: 'Australorp',
-      age: 45,
-      totalBirds: 400,
-      mortality: 8,
-      eggProduction: 82,
-      avgWeight: 2000,
-      health: 'Good',
-      lastUpdated: '3 hours ago',
-      notes: 'Strong breeding performance',
-    },
+  const breedOptions = [
+    { label: 'Rhode Island Red', value: 'Rhode Island Red' },
+    { label: 'New Hampshire', value: 'New Hampshire' },
+    { label: 'Cornish Cross', value: 'Cornish Cross' },
+    { label: 'Plymouth Rock', value: 'Plymouth Rock' },
+    { label: 'Australorp', value: 'Australorp' },
+    { label: 'Leghorn', value: 'Leghorn' },
+    { label: 'Sussex', value: 'Sussex' },
+    { label: 'Orpington', value: 'Orpington' },
   ];
 
-  const handleFlockPress = (flock: any) => {
+  const handleFlockPress = (flock: Flock) => {
     setSelectedFlock(flock);
     setIsModalVisible(true);
   };
+
+  const handleAddFlock = () => {
+    if (!newFlockName || !newFlockBreed || !newFlockCount || !newFlockAge) {
+      Alert.alert('Error', 'Please fill in all required fields');
+      return;
+    }
+
+    const newFlock: Flock = {
+      id: Date.now().toString(),
+      name: newFlockName,
+      breed: newFlockBreed,
+      age: parseInt(newFlockAge),
+      totalBirds: parseInt(newFlockCount),
+      mortality: 0,
+      eggProduction: 0,
+      avgWeight: 0,
+      health: 'Good',
+      lastUpdated: 'Just now',
+      notes: newFlockNotes,
+    };
+
+    dispatch({ type: 'ADD_FLOCK', payload: newFlock });
+    
+    // Reset form
+    setNewFlockName('');
+    setNewFlockBreed('');
+    setNewFlockCount('');
+    setNewFlockAge('');
+    setNewFlockNotes('');
+    setIsAddModalVisible(false);
+    
+    Alert.alert('Success', 'New flock added successfully!');
+  };
+
+  const totalBirds = state.flocks.reduce((sum, flock) => sum + flock.totalBirds, 0);
+  const totalMortality = state.flocks.reduce((sum, flock) => sum + flock.mortality, 0);
+  const avgProduction = state.flocks.length > 0 
+    ? Math.round(state.flocks.reduce((sum, flock) => sum + flock.eggProduction, 0) / state.flocks.length)
+    : 0;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -146,26 +140,26 @@ export default function Flocks() {
       {/* Summary Cards */}
       <View style={styles.summaryContainer}>
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryValue}>2,450</Text>
+          <Text style={styles.summaryValue}>{totalBirds.toLocaleString()}</Text>
           <Text style={styles.summaryLabel}>Total Birds</Text>
         </View>
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryValue}>5</Text>
+          <Text style={styles.summaryValue}>{state.flocks.length}</Text>
           <Text style={styles.summaryLabel}>Active Coops</Text>
         </View>
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryValue}>29</Text>
+          <Text style={styles.summaryValue}>{totalMortality}</Text>
           <Text style={styles.summaryLabel}>Total Mortality</Text>
         </View>
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryValue}>79%</Text>
+          <Text style={styles.summaryValue}>{avgProduction}%</Text>
           <Text style={styles.summaryLabel}>Avg Production</Text>
         </View>
       </View>
 
       {/* Flocks List */}
       <ScrollView style={styles.flocksContainer} showsVerticalScrollIndicator={false}>
-        {flocks.map((flock) => (
+        {state.flocks.map((flock) => (
           <FlockCard key={flock.id} flock={flock} onPress={handleFlockPress} />
         ))}
       </ScrollView>
@@ -201,7 +195,10 @@ export default function Flocks() {
                 </View>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Health Status:</Text>
-                  <Text style={[styles.detailValue, { color: selectedFlock.health === 'Excellent' ? '#16A34A' : '#F59E0B' }]}>
+                  <Text style={[styles.detailValue, { 
+                    color: selectedFlock.health === 'Excellent' ? '#16A34A' : 
+                          selectedFlock.health === 'Good' ? '#F59E0B' : '#DC2626' 
+                  }]}>
                     {selectedFlock.health}
                   </Text>
                 </View>
@@ -258,47 +255,54 @@ export default function Flocks() {
               <Ionicons name="close" size={24} color="#374151" />
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Add New Flock</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={handleAddFlock}>
               <Text style={styles.saveButton}>Save</Text>
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.modalContent}>
             <View style={styles.formSection}>
-              <Text style={styles.inputLabel}>Flock Name</Text>
+              <Text style={styles.inputLabel}>Flock Name *</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Enter flock name"
                 placeholderTextColor="#9CA3AF"
+                value={newFlockName}
+                onChangeText={setNewFlockName}
               />
             </View>
 
             <View style={styles.formSection}>
-              <Text style={styles.inputLabel}>Breed</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter breed"
-                placeholderTextColor="#9CA3AF"
+              <Text style={styles.inputLabel}>Breed *</Text>
+              <Dropdown
+                options={breedOptions}
+                selectedValue={newFlockBreed}
+                onSelect={setNewFlockBreed}
+                placeholder="Select breed"
               />
             </View>
 
             <View style={styles.formRow}>
               <View style={[styles.formSection, { flex: 1, marginRight: 10 }]}>
-                <Text style={styles.inputLabel}>Initial Count</Text>
+                <Text style={styles.inputLabel}>Initial Count *</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="0"
                   keyboardType="numeric"
                   placeholderTextColor="#9CA3AF"
+                  value={newFlockCount}
+                  onChangeText={setNewFlockCount}
                 />
               </View>
               <View style={[styles.formSection, { flex: 1, marginLeft: 10 }]}>
-                <Text style={styles.inputLabel}>Age (weeks)</Text>
+                <Text style={styles.inputLabel}>Age (weeks) *</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="0"
                   keyboardType="numeric"
                   placeholderTextColor="#9CA3AF"
+                  value={newFlockAge}
+                  onChangeText={setNewFlockAge}
                 />
               </View>
             </View>
@@ -311,6 +315,8 @@ export default function Flocks() {
                 multiline
                 numberOfLines={4}
                 placeholderTextColor="#9CA3AF"
+                value={newFlockNotes}
+                onChangeText={setNewFlockNotes}
               />
             </View>
           </ScrollView>

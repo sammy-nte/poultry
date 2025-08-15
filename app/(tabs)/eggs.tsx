@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Modal, TextInput } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Modal, TextInput, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAppContext, EggProduction } from '@/contexts/AppContext';
+import DatePicker from '@/components/DatePicker';
 
 const ProductionCard = ({ date, eggs, quality, notes }: any) => (
   <View style={styles.productionCard}>
@@ -33,48 +35,102 @@ const ProductionCard = ({ date, eggs, quality, notes }: any) => (
 );
 
 export default function Eggs() {
+  const { state, dispatch } = useAppContext();
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState('week');
+  
+  // Form state
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [totalEggs, setTotalEggs] = useState('');
+  const [gradeA, setGradeA] = useState('');
+  const [gradeB, setGradeB] = useState('');
+  const [damaged, setDamaged] = useState('');
+  const [coopBreakdown, setCoopBreakdown] = useState<Record<string, string>>({});
+  const [notes, setNotes] = useState('');
 
-  const eggProduction = [
-    {
-      date: 'Today',
-      eggs: 1850,
-      quality: { gradeA: 1600, gradeB: 200, damaged: 50 },
-      notes: 'Excellent production day',
-    },
-    {
-      date: 'Yesterday',
-      eggs: 1780,
-      quality: { gradeA: 1520, gradeB: 210, damaged: 50 },
-      notes: 'Good quality overall',
-    },
-    {
-      date: 'Jan 20, 2025',
-      eggs: 1820,
-      quality: { gradeA: 1580, gradeB: 190, damaged: 50 },
-      notes: '',
-    },
-    {
-      date: 'Jan 19, 2025',
-      eggs: 1750,
-      quality: { gradeA: 1500, gradeB: 200, damaged: 50 },
-      notes: 'Slight dip in production',
-    },
-    {
-      date: 'Jan 18, 2025',
-      eggs: 1880,
-      quality: { gradeA: 1650, gradeB: 180, damaged: 50 },
-      notes: 'Peak production day',
-    },
-  ];
+  const handleAddProduction = () => {
+    if (!totalEggs || !gradeA || !gradeB || !damaged) {
+      Alert.alert('Error', 'Please fill in all egg quality fields');
+      return;
+    }
+
+    const total = parseInt(totalEggs);
+    const qualityTotal = parseInt(gradeA) + parseInt(gradeB) + parseInt(damaged);
+    
+    if (qualityTotal !== total) {
+      Alert.alert('Error', 'Quality breakdown must equal total eggs');
+      return;
+    }
+
+    const formatDate = (date: Date) => {
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      if (date.toDateString() === today.toDateString()) {
+        return 'Today';
+      } else if (date.toDateString() === yesterday.toDateString()) {
+        return 'Yesterday';
+      } else {
+        return date.toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric', 
+          year: 'numeric' 
+        });
+      }
+    };
+
+    const newProduction: EggProduction = {
+      id: Date.now().toString(),
+      date: formatDate(selectedDate),
+      eggs: total,
+      quality: {
+        gradeA: parseInt(gradeA),
+        gradeB: parseInt(gradeB),
+        damaged: parseInt(damaged),
+      },
+      coopBreakdown: Object.fromEntries(
+        Object.entries(coopBreakdown).map(([coop, value]) => [coop, parseInt(value) || 0])
+      ),
+      notes,
+    };
+
+    dispatch({ type: 'ADD_EGG_PRODUCTION', payload: newProduction });
+    
+    // Reset form
+    setTotalEggs('');
+    setGradeA('');
+    setGradeB('');
+    setDamaged('');
+    setCoopBreakdown({});
+    setNotes('');
+    setSelectedDate(new Date());
+    setIsAddModalVisible(false);
+    
+    Alert.alert('Success', 'Egg production recorded successfully!');
+  };
+
+  const totalEggsThisWeek = state.eggProduction
+    .slice(0, 7)
+    .reduce((sum, production) => sum + production.eggs, 0);
+  
+  const averageDaily = state.eggProduction.length > 0 
+    ? Math.round(totalEggsThisWeek / Math.min(7, state.eggProduction.length))
+    : 0;
+
+  const gradeAPercentage = state.eggProduction.length > 0
+    ? Math.round(
+        (state.eggProduction.reduce((sum, p) => sum + p.quality.gradeA, 0) / 
+         state.eggProduction.reduce((sum, p) => sum + p.eggs, 0)) * 100
+      )
+    : 0;
 
   const weeklyStats = {
-    totalEggs: 12450,
-    averageDaily: 1778,
-    gradeAPercentage: 87,
+    totalEggs: totalEggsThisWeek,
+    averageDaily,
+    gradeAPercentage,
     efficiency: 85.5,
-    revenue: 3240,
+    revenue: Math.round(totalEggsThisWeek * 0.26), // Assuming $0.26 per egg
   };
 
   return (
@@ -157,9 +213,9 @@ export default function Eggs() {
       <View style={styles.recordsSection}>
         <Text style={styles.sectionTitle}>Daily Records</Text>
         <ScrollView style={styles.recordsList} showsVerticalScrollIndicator={false}>
-          {eggProduction.map((record, index) => (
+          {state.eggProduction.map((record) => (
             <ProductionCard
-              key={index}
+              key={record.id}
               date={record.date}
               eggs={record.eggs}
               quality={record.quality}
@@ -177,7 +233,7 @@ export default function Eggs() {
               <Ionicons name="close" size={24} color="#374151" />
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Record Egg Production</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={handleAddProduction}>
               <Text style={styles.saveButton}>Save</Text>
             </TouchableOpacity>
           </View>
@@ -185,24 +241,26 @@ export default function Eggs() {
           <ScrollView style={styles.modalContent}>
             <View style={styles.formSection}>
               <Text style={styles.inputLabel}>Collection Date</Text>
-              <TouchableOpacity style={styles.dateInput}>
-                <Text style={styles.dateText}>Today - Jan 21, 2025</Text>
-                <Ionicons name="calendar" size={20} color="#6B7280" />
-              </TouchableOpacity>
+              <DatePicker
+                selectedDate={selectedDate}
+                onDateChange={setSelectedDate}
+              />
             </View>
 
             <View style={styles.formSection}>
-              <Text style={styles.inputLabel}>Total Eggs Collected</Text>
+              <Text style={styles.inputLabel}>Total Eggs Collected *</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Enter total count"
                 keyboardType="numeric"
                 placeholderTextColor="#9CA3AF"
+                value={totalEggs}
+                onChangeText={setTotalEggs}
               />
             </View>
 
             <View style={styles.formSection}>
-              <Text style={styles.inputLabel}>Quality Breakdown</Text>
+              <Text style={styles.inputLabel}>Quality Breakdown *</Text>
               <View style={styles.qualityInputs}>
                 <View style={styles.qualityRow}>
                   <Text style={styles.qualityInputLabel}>Grade A</Text>
@@ -211,6 +269,8 @@ export default function Eggs() {
                     placeholder="0"
                     keyboardType="numeric"
                     placeholderTextColor="#9CA3AF"
+                    value={gradeA}
+                    onChangeText={setGradeA}
                   />
                 </View>
                 <View style={styles.qualityRow}>
@@ -220,6 +280,8 @@ export default function Eggs() {
                     placeholder="0"
                     keyboardType="numeric"
                     placeholderTextColor="#9CA3AF"
+                    value={gradeB}
+                    onChangeText={setGradeB}
                   />
                 </View>
                 <View style={styles.qualityRow}>
@@ -229,6 +291,8 @@ export default function Eggs() {
                     placeholder="0"
                     keyboardType="numeric"
                     placeholderTextColor="#9CA3AF"
+                    value={damaged}
+                    onChangeText={setDamaged}
                   />
                 </View>
               </View>
@@ -237,42 +301,22 @@ export default function Eggs() {
             <View style={styles.formSection}>
               <Text style={styles.inputLabel}>Coop Breakdown</Text>
               <View style={styles.coopInputs}>
-                <View style={styles.coopRow}>
-                  <Text style={styles.coopLabel}>Coop A</Text>
-                  <TextInput
-                    style={[styles.input, styles.coopInput]}
-                    placeholder="0"
-                    keyboardType="numeric"
-                    placeholderTextColor="#9CA3AF"
-                  />
-                </View>
-                <View style={styles.coopRow}>
-                  <Text style={styles.coopLabel}>Coop B</Text>
-                  <TextInput
-                    style={[styles.input, styles.coopInput]}
-                    placeholder="0"
-                    keyboardType="numeric"
-                    placeholderTextColor="#9CA3AF"
-                  />
-                </View>
-                <View style={styles.coopRow}>
-                  <Text style={styles.coopLabel}>Coop D</Text>
-                  <TextInput
-                    style={[styles.input, styles.coopInput]}
-                    placeholder="0"
-                    keyboardType="numeric"
-                    placeholderTextColor="#9CA3AF"
-                  />
-                </View>
-                <View style={styles.coopRow}>
-                  <Text style={styles.coopLabel}>Coop E</Text>
-                  <TextInput
-                    style={[styles.input, styles.coopInput]}
-                    placeholder="0"
-                    keyboardType="numeric"
-                    placeholderTextColor="#9CA3AF"
-                  />
-                </View>
+                {state.flocks.map((flock) => (
+                  <View key={flock.id} style={styles.coopRow}>
+                    <Text style={styles.coopLabel}>{flock.name}</Text>
+                    <TextInput
+                      style={[styles.input, styles.coopInput]}
+                      placeholder="0"
+                      keyboardType="numeric"
+                      placeholderTextColor="#9CA3AF"
+                      value={coopBreakdown[flock.name] || ''}
+                      onChangeText={(value) => setCoopBreakdown(prev => ({
+                        ...prev,
+                        [flock.name]: value
+                      }))}
+                    />
+                  </View>
+                ))}
               </View>
             </View>
 
@@ -284,6 +328,8 @@ export default function Eggs() {
                 multiline
                 numberOfLines={4}
                 placeholderTextColor="#9CA3AF"
+                value={notes}
+                onChangeText={setNotes}
               />
             </View>
           </ScrollView>
@@ -533,7 +579,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   formSection: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   inputLabel: {
     fontSize: 14,
@@ -549,16 +595,6 @@ const styles = StyleSheet.create({
     padding: 16,
     fontSize: 16,
     color: '#111827',
-  },
-  dateInput: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    padding: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
   },
   qualityInputs: {
     gap: 12,

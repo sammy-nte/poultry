@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAppContext } from '@/contexts/AppContext';
 
 const DashboardCard = ({ title, value, subtitle, icon, color, onPress }: any) => (
   <TouchableOpacity style={[styles.card, { borderLeftColor: color }]} onPress={onPress}>
@@ -34,6 +35,23 @@ const AlertItem = ({ type, message, time }: any) => (
 );
 
 export default function Dashboard() {
+  const { state } = useAppContext();
+
+  // Calculate dynamic stats
+  const totalBirds = state.flocks.reduce((sum, flock) => sum + flock.totalBirds, 0);
+  const todayEggs = state.eggProduction.length > 0 ? state.eggProduction[0].eggs : 0;
+  const totalFeedStock = state.feedInventory.reduce((sum, feed) => sum + feed.currentStock, 0);
+  const monthlyRevenue = state.transactions
+    .filter(t => t.type === 'income')
+    .reduce((sum, t) => sum + t.amount, 0);
+  
+  const avgProduction = state.flocks.length > 0 
+    ? state.flocks.reduce((sum, flock) => sum + flock.eggProduction, 0) / state.flocks.length
+    : 0;
+  
+  const mortalityRate = totalBirds > 0 
+    ? (state.flocks.reduce((sum, flock) => sum + flock.mortality, 0) / totalBirds) * 100
+    : 0;
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -57,28 +75,28 @@ export default function Dashboard() {
           <View style={styles.statsGrid}>
             <DashboardCard
               title="Total Birds"
-              value="2,450"
-              subtitle="Across 5 coops"
+              value={totalBirds.toLocaleString()}
+              subtitle={`Across ${state.flocks.length} coops`}
               icon="leaf"
               color="#16A34A"
             />
             <DashboardCard
               title="Today's Eggs"
-              value="1,850"
+              value={todayEggs.toLocaleString()}
               subtitle="↑ 3% from yesterday"
               icon="egg"
               color="#F59E0B"
             />
             <DashboardCard
               title="Feed Stock"
-              value="850 kg"
+              value={`${totalFeedStock} kg`}
               subtitle="7 days remaining"
               icon="nutrition"
               color="#8B5A2B"
             />
             <DashboardCard
               title="Revenue (Month)"
-              value="$12,400"
+              value={`$${monthlyRevenue.toLocaleString()}`}
               subtitle="↑ 15% from last month"
               icon="wallet"
               color="#059669"
@@ -92,9 +110,9 @@ export default function Dashboard() {
           <View style={styles.trendCard}>
             <View style={styles.trendItem}>
               <Text style={styles.trendLabel}>Egg Production Rate</Text>
-              <Text style={styles.trendValue}>85.5%</Text>
+              <Text style={styles.trendValue}>{avgProduction.toFixed(1)}%</Text>
               <View style={styles.trendBar}>
-                <View style={[styles.trendProgress, { width: '85.5%' }]} />
+                <View style={[styles.trendProgress, { width: `${avgProduction}%` }]} />
               </View>
             </View>
             <View style={styles.trendItem}>
@@ -106,9 +124,9 @@ export default function Dashboard() {
             </View>
             <View style={styles.trendItem}>
               <Text style={styles.trendLabel}>Mortality Rate</Text>
-              <Text style={styles.trendValue}>0.8%</Text>
+              <Text style={styles.trendValue}>{mortalityRate.toFixed(1)}%</Text>
               <View style={styles.trendBar}>
-                <View style={[styles.trendProgress, { width: '15%', backgroundColor: '#DC2626' }]} />
+                <View style={[styles.trendProgress, { width: `${Math.min(mortalityRate * 10, 100)}%`, backgroundColor: '#DC2626' }]} />
               </View>
             </View>
           </View>

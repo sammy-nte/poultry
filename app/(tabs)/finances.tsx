@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Modal, TextInput } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Modal, TextInput, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAppContext, Transaction } from '@/contexts/AppContext';
+import Dropdown from '@/components/Dropdown';
+import DatePicker from '@/components/DatePicker';
 
 const TransactionItem = ({ type, description, amount, date, category }: any) => {
   const isIncome = type === 'income';
@@ -33,108 +36,107 @@ const TransactionItem = ({ type, description, amount, date, category }: any) => 
   );
 };
 
-const RevenueChart = ({ data }: any) => (
-  <View style={styles.chartContainer}>
-    <Text style={styles.chartTitle}>Monthly Revenue Trend</Text>
-    <View style={styles.chart}>
-      {data.map((item: any, index: number) => (
-        <View key={index} style={styles.chartBar}>
-          <View 
-            style={[
-              styles.bar, 
-              { 
-                height: `${(item.amount / Math.max(...data.map((d: any) => d.amount))) * 100}%`,
-                backgroundColor: '#16A34A'
-              }
-            ]} 
-          />
-          <Text style={styles.chartLabel}>{item.month}</Text>
-          <Text style={styles.chartValue}>${(item.amount / 1000).toFixed(1)}k</Text>
-        </View>
-      ))}
-    </View>
-  </View>
-);
-
 export default function Finances() {
+  const { state, dispatch } = useAppContext();
   const [selectedPeriod, setSelectedPeriod] = useState('month');
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [transactionType, setTransactionType] = useState('income');
+  
+  // Form state
+  const [amount, setAmount] = useState('');
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState('');
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [notes, setNotes] = useState('');
 
-  const financialSummary = {
-    totalRevenue: 45800,
-    totalExpenses: 28200,
-    netProfit: 17600,
-    profitMargin: 38.4,
+  const incomeCategories = [
+    { label: 'Egg Sales', value: 'Egg Sales' },
+    { label: 'Livestock Sales', value: 'Livestock Sales' },
+    { label: 'Breeding Services', value: 'Breeding Services' },
+    { label: 'Consulting', value: 'Consulting' },
+    { label: 'Other Income', value: 'Other Income' },
+  ];
+
+  const expenseCategories = [
+    { label: 'Feed & Supplies', value: 'Feed & Supplies' },
+    { label: 'Healthcare', value: 'Healthcare' },
+    { label: 'Utilities', value: 'Utilities' },
+    { label: 'Labor', value: 'Labor' },
+    { label: 'Equipment', value: 'Equipment' },
+    { label: 'Maintenance', value: 'Maintenance' },
+    { label: 'Other Expenses', value: 'Other Expenses' },
+  ];
+
+  const handleAddTransaction = () => {
+    if (!amount || !description || !category) {
+      Alert.alert('Error', 'Please fill in all required fields');
+      return;
+    }
+
+    const amountNum = parseFloat(amount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      Alert.alert('Error', 'Please enter a valid amount');
+      return;
+    }
+
+    const formatDate = (date: Date) => {
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      if (date.toDateString() === today.toDateString()) {
+        return 'Today';
+      } else if (date.toDateString() === yesterday.toDateString()) {
+        return 'Yesterday';
+      } else {
+        return date.toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric', 
+          year: 'numeric' 
+        });
+      }
+    };
+
+    const newTransaction: Transaction = {
+      id: Date.now().toString(),
+      type: transactionType as 'income' | 'expense',
+      description,
+      amount: amountNum,
+      date: formatDate(selectedDate),
+      category,
+      notes,
+    };
+
+    dispatch({ type: 'ADD_TRANSACTION', payload: newTransaction });
+    
+    // Reset form
+    setAmount('');
+    setDescription('');
+    setCategory('');
+    setNotes('');
+    setSelectedDate(new Date());
+    setIsAddModalVisible(false);
+    
+    Alert.alert('Success', 'Transaction added successfully!');
   };
 
-  const monthlyData = [
-    { month: 'Aug', amount: 38500 },
-    { month: 'Sep', amount: 42300 },
-    { month: 'Oct', amount: 39800 },
-    { month: 'Nov', amount: 46200 },
-    { month: 'Dec', amount: 43900 },
-    { month: 'Jan', amount: 45800 },
-  ];
+  // Calculate financial summary
+  const totalRevenue = state.transactions
+    .filter(t => t.type === 'income')
+    .reduce((sum, t) => sum + t.amount, 0);
+  
+  const totalExpenses = state.transactions
+    .filter(t => t.type === 'expense')
+    .reduce((sum, t) => sum + t.amount, 0);
+  
+  const netProfit = totalRevenue - totalExpenses;
+  const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
 
-  const recentTransactions = [
-    {
-      type: 'income',
-      description: 'Egg Sales - Local Market',
-      amount: 1250,
-      date: 'Today',
-      category: 'Egg Sales',
-    },
-    {
-      type: 'expense',
-      description: 'Feed Purchase - Layer Mash',
-      amount: 850,
-      date: 'Yesterday',
-      category: 'Feed & Supplies',
-    },
-    {
-      type: 'income',
-      description: 'Bird Sales - 50 Broilers',
-      amount: 2100,
-      date: 'Jan 19',
-      category: 'Livestock Sales',
-    },
-    {
-      type: 'expense',
-      description: 'Veterinary Services',
-      amount: 320,
-      date: 'Jan 18',
-      category: 'Healthcare',
-    },
-    {
-      type: 'expense',
-      description: 'Utilities - Electricity',
-      amount: 180,
-      date: 'Jan 17',
-      category: 'Utilities',
-    },
-    {
-      type: 'income',
-      description: 'Egg Sales - Restaurant Supply',
-      amount: 890,
-      date: 'Jan 16',
-      category: 'Egg Sales',
-    },
-  ];
-
-  const categoryBreakdown = {
-    income: [
-      { category: 'Egg Sales', amount: 32400, percentage: 71 },
-      { category: 'Livestock Sales', amount: 10200, percentage: 22 },
-      { category: 'Other', amount: 3200, percentage: 7 },
-    ],
-    expenses: [
-      { category: 'Feed & Supplies', amount: 15600, percentage: 55 },
-      { category: 'Healthcare', amount: 4200, percentage: 15 },
-      { category: 'Utilities', amount: 3800, percentage: 13 },
-      { category: 'Labor', amount: 2400, percentage: 9 },
-      { category: 'Other', amount: 2200, percentage: 8 },
-    ]
+  const financialSummary = {
+    totalRevenue,
+    totalExpenses,
+    netProfit,
+    profitMargin,
   };
 
   return (
@@ -176,7 +178,7 @@ export default function Finances() {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Financial Summary */}
         <View style={styles.summarySection}>
-          <Text style={styles.sectionTitle}>This Month Summary</Text>
+          <Text style={styles.sectionTitle}>Financial Summary</Text>
           <View style={styles.summaryGrid}>
             <View style={[styles.summaryCard, styles.revenueCard]}>
               <Text style={styles.summaryValue}>${financialSummary.totalRevenue.toLocaleString()}</Text>
@@ -206,52 +208,13 @@ export default function Finances() {
             </View>
             
             <View style={[styles.summaryCard, styles.marginCard]}>
-              <Text style={styles.summaryValue}>{financialSummary.profitMargin}%</Text>
+              <Text style={styles.summaryValue}>{financialSummary.profitMargin.toFixed(1)}%</Text>
               <Text style={styles.summaryLabel}>Profit Margin</Text>
-              <Text style={styles.summarySubtext}>Excellent performance</Text>
+              <Text style={styles.summarySubtext}>
+                {financialSummary.profitMargin > 30 ? 'Excellent' : 
+                 financialSummary.profitMargin > 15 ? 'Good' : 'Needs improvement'}
+              </Text>
             </View>
-          </View>
-        </View>
-
-        {/* Revenue Chart */}
-        <View style={styles.chartSection}>
-          <RevenueChart data={monthlyData} />
-        </View>
-
-        {/* Category Breakdown */}
-        <View style={styles.categorySection}>
-          <Text style={styles.sectionTitle}>Category Breakdown</Text>
-          
-          <View style={styles.categoryContainer}>
-            <Text style={styles.categoryTitle}>Income Sources</Text>
-            {categoryBreakdown.income.map((item, index) => (
-              <View key={index} style={styles.categoryItem}>
-                <View style={styles.categoryInfo}>
-                  <Text style={styles.categoryName}>{item.category}</Text>
-                  <Text style={styles.categoryAmount}>${item.amount.toLocaleString()}</Text>
-                </View>
-                <View style={styles.categoryProgress}>
-                  <View style={[styles.categoryBar, { width: `${item.percentage}%`, backgroundColor: '#16A34A' }]} />
-                </View>
-                <Text style={styles.categoryPercentage}>{item.percentage}%</Text>
-              </View>
-            ))}
-          </View>
-
-          <View style={styles.categoryContainer}>
-            <Text style={styles.categoryTitle}>Expense Categories</Text>
-            {categoryBreakdown.expenses.map((item, index) => (
-              <View key={index} style={styles.categoryItem}>
-                <View style={styles.categoryInfo}>
-                  <Text style={styles.categoryName}>{item.category}</Text>
-                  <Text style={styles.categoryAmount}>${item.amount.toLocaleString()}</Text>
-                </View>
-                <View style={styles.categoryProgress}>
-                  <View style={[styles.categoryBar, { width: `${item.percentage}%`, backgroundColor: '#DC2626' }]} />
-                </View>
-                <Text style={styles.categoryPercentage}>{item.percentage}%</Text>
-              </View>
-            ))}
           </View>
         </View>
 
@@ -265,9 +228,9 @@ export default function Finances() {
           </View>
           
           <View style={styles.transactionsList}>
-            {recentTransactions.map((transaction, index) => (
+            {state.transactions.slice(0, 10).map((transaction) => (
               <TransactionItem
-                key={index}
+                key={transaction.id}
                 type={transaction.type}
                 description={transaction.description}
                 amount={transaction.amount}
@@ -287,7 +250,7 @@ export default function Finances() {
               <Ionicons name="close" size={24} color="#374151" />
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Add Transaction</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={handleAddTransaction}>
               <Text style={styles.saveButton}>Save</Text>
             </TouchableOpacity>
           </View>
@@ -321,7 +284,7 @@ export default function Finances() {
             </View>
 
             <View style={styles.formSection}>
-              <Text style={styles.inputLabel}>Amount</Text>
+              <Text style={styles.inputLabel}>Amount *</Text>
               <View style={styles.amountInput}>
                 <Text style={styles.currencySymbol}>$</Text>
                 <TextInput
@@ -329,33 +292,39 @@ export default function Finances() {
                   placeholder="0.00"
                   keyboardType="decimal-pad"
                   placeholderTextColor="#9CA3AF"
+                  value={amount}
+                  onChangeText={setAmount}
                 />
               </View>
             </View>
 
             <View style={styles.formSection}>
-              <Text style={styles.inputLabel}>Description</Text>
+              <Text style={styles.inputLabel}>Description *</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Enter transaction description"
                 placeholderTextColor="#9CA3AF"
+                value={description}
+                onChangeText={setDescription}
               />
             </View>
 
             <View style={styles.formSection}>
-              <Text style={styles.inputLabel}>Category</Text>
-              <TouchableOpacity style={styles.selectInput}>
-                <Text style={styles.selectText}>Select category</Text>
-                <Ionicons name="chevron-down" size={20} color="#6B7280" />
-              </TouchableOpacity>
+              <Text style={styles.inputLabel}>Category *</Text>
+              <Dropdown
+                options={transactionType === 'income' ? incomeCategories : expenseCategories}
+                selectedValue={category}
+                onSelect={setCategory}
+                placeholder="Select category"
+              />
             </View>
 
             <View style={styles.formSection}>
               <Text style={styles.inputLabel}>Date</Text>
-              <TouchableOpacity style={styles.dateInput}>
-                <Text style={styles.dateText}>Today - Jan 21, 2025</Text>
-                <Ionicons name="calendar" size={20} color="#6B7280" />
-              </TouchableOpacity>
+              <DatePicker
+                selectedDate={selectedDate}
+                onDateChange={setSelectedDate}
+              />
             </View>
 
             <View style={styles.formSection}>
@@ -366,6 +335,8 @@ export default function Finances() {
                 multiline
                 numberOfLines={3}
                 placeholderTextColor="#9CA3AF"
+                value={notes}
+                onChangeText={setNotes}
               />
             </View>
           </ScrollView>
@@ -502,109 +473,6 @@ const styles = StyleSheet.create({
   summarySubtext: {
     fontSize: 12,
     color: '#9CA3AF',
-  },
-  chartSection: {
-    paddingHorizontal: 20,
-    marginBottom: 24,
-  },
-  chartContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  chartTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 16,
-  },
-  chart: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    height: 120,
-  },
-  chartBar: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  bar: {
-    backgroundColor: '#16A34A',
-    width: 20,
-    borderRadius: 2,
-    marginBottom: 8,
-  },
-  chartLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 4,
-  },
-  chartValue: {
-    fontSize: 11,
-    color: '#9CA3AF',
-  },
-  categorySection: {
-    paddingHorizontal: 20,
-    marginBottom: 24,
-  },
-  categoryContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  categoryTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 12,
-  },
-  categoryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  categoryInfo: {
-    flex: 1,
-  },
-  categoryName: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#374151',
-    marginBottom: 2,
-  },
-  categoryAmount: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  categoryProgress: {
-    flex: 2,
-    height: 6,
-    backgroundColor: '#E5E7EB',
-    borderRadius: 3,
-    marginHorizontal: 12,
-    overflow: 'hidden',
-  },
-  categoryBar: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  categoryPercentage: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#374151',
-    width: 30,
-    textAlign: 'right',
   },
   transactionsSection: {
     paddingHorizontal: 20,
@@ -769,34 +637,6 @@ const styles = StyleSheet.create({
     borderColor: '#D1D5DB',
     borderRadius: 8,
     padding: 16,
-    fontSize: 16,
-    color: '#111827',
-  },
-  selectInput: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    padding: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  selectText: {
-    fontSize: 16,
-    color: '#9CA3AF',
-  },
-  dateInput: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    padding: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  dateText: {
     fontSize: 16,
     color: '#111827',
   },
